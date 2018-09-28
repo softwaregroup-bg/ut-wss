@@ -12,7 +12,7 @@ const helpers = {
     },
     getTokens(strs, separators) {
         if (!separators.length) {
-            return {key: strs.shift(), value: strs.shift()};
+            return {key: strs.shift().trim(), value: strs.shift().trim()};
         }
         let separator = separators.shift();
         return strs
