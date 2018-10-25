@@ -1,6 +1,6 @@
 {
   "name": "ut-wss",
-  "version": "0.2.0-rc-godfather.1",
+  "version": "0.2.0-rc-godfather.2",
   "description": "Websocket server",
   "main": "index.js",
   "scripts": {
