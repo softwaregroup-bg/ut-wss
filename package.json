@@ -30,7 +30,7 @@
     "jsonwebtoken": "8.3.0"
   },
   "devDependencies": {
-    "ut-tools": "^6.3.4"
+    "ut-tools": "^6.8.10"
   },
   "repository": {
     "type": "git",
