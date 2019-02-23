@@ -1,3 +1,12 @@
+## [0.2.1](https://github.com/softwaregroup-bg/ut-wss/compare/v0.2.0...v0.2.1) (2019-02-23)
+
+
+### Bug Fixes
+
+* update jsonwebtoken ([8907f5c](https://github.com/softwaregroup-bg/ut-wss/commit/8907f5c))
+
+
+
 # [0.2.0](https://github.com/softwaregroup-bg/ut-wss/compare/v0.1.1...v0.2.0) (2019-02-02)
 
 
