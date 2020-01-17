@@ -1,3 +1,12 @@
+## [0.2.2](https://github.com/softwaregroup-bg/ut-wss/compare/v0.2.1...v0.2.2) (2020-01-17)
+
+
+### Bug Fixes
+
+* upgrade ws ([9211003](https://github.com/softwaregroup-bg/ut-wss/commit/9211003))
+
+
+
 ## [0.2.1](https://github.com/softwaregroup-bg/ut-wss/compare/v0.2.0...v0.2.1) (2019-02-23)
 
 
