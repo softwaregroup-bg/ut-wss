@@ -20,42 +20,44 @@ class SocketServer extends EventEmitter {
         this.wss = new ws.Server({
             server: httpServerListener
         });
-        this.wss.on('connection', (socket) => {
-            let cookies = (socket.upgradeReq.headers && socket.upgradeReq.headers.cookie) || '';
-            let url = socket.upgradeReq.url.split('?').shift();
-            let fingerprint;
+        this.wss.on('connection', (socket, req) => {
             try {
-                fingerprint = this.router.analyze(url).fingerprint;
+                // socket.upgradeReq not supported anymore:
+                // https://github.com/websockets/ws/pull/1099
+                // persist only fingerprint (for verification)
+                socket.fingerprint = this.router.analyze(req.url).fingerprint;
             } catch (e) {
-                return socket.close(4500, '4500');
+                return socket.close(4404, 'Wrong url:' + req.url);
             }
+            const cookies = (req.headers && req.headers.cookie) || '';
+            const url = req.url.split('?').shift();
             Promise.resolve()
-                .then(() => (!this.disableXsrf && helpers.jwtXsrfCheck(
-                    helpers.getTokens([socket.upgradeReq.url.replace(/[^?]+\?/ig, '')], ['&', '=']), // parse url string into hash object
-                    helpers.getTokens([cookies], [';', '='])[this.utHttpServerConfig.jwt.cookieKey], // parse cookie string into hash object
-                    this.utHttpServerConfig.jwt.key,
-                    Object.assign({}, this.utHttpServerConfig.jwt.verifyOptions, {ignoreExpiration: false})
-                )
-                ))
-                .then((p) => (new Promise((resolve, reject) => {
-                    let context = this.router.route(socket.upgradeReq.method.toLowerCase(), url);
-                    if (context.isBoom) {
-                        throw context;
-                    }
-                    context.permissions = p;
-                    resolve(context);
-                })))
+                .then(() => {
+                    if (this.disableXsrf) return;
+                    return helpers.jwtXsrfCheck(
+                        helpers.getTokens([req.url.replace(/[^?]+\?/ig, '')], ['&', '=']), // parse url string into hash object
+                        helpers.getTokens([cookies], [';', '='])[this.utHttpServerConfig.jwt.cookieKey], // parse cookie string into hash object
+                        this.utHttpServerConfig.jwt.key,
+                        Object.assign({}, this.utHttpServerConfig.jwt.verifyOptions, {ignoreExpiration: false})
+                    );
+                })
+                .then(permissions => {
+                    const context = this.router.route(req.method.toLowerCase(), url);
+                    if (context.isBoom) throw context;
+                    context.permissions = permissions;
+                    return context;
+                })
                 .then((context) => {
                     if (!this.disablePermissionVerify) {
-                        return helpers.permissionVerify(context, fingerprint, this.utHttpServerConfig.appId);
+                        return helpers.permissionVerify(context, socket.fingerprint, this.utHttpServerConfig.appId);
                     }
                     return context;
                 })
-                .then((context) => (context.route.verifyClient(socket)))
+                .then(context => context.route.verifyClient(socket))
                 .then(() => {
                     return this.router
-                        .route(socket.upgradeReq.method.toLowerCase(), url).route
-                        .handler(fingerprint, socket);
+                        .route(req.method.toLowerCase(), url).route
+                        .handler(socket.fingerprint, socket);
                 })
                 .then(() => (this.emit('connection')))
                 .catch((err) => {
@@ -74,46 +76,27 @@ class SocketServer extends EventEmitter {
             path: path
         }, {
             handler: (roomId, socket) => {
-                if (!this.rooms[roomId]) {
-                    this.rooms[roomId] = new Set();
-                }
+                if (!this.rooms[roomId]) this.rooms[roomId] = new Set();
                 this.rooms[roomId].add(socket);
-                socket.on('close', () => {
-                    this.rooms[roomId].delete(socket);
-                });
+                socket.on('close', () => this.rooms[roomId].delete(socket));
             },
-            verifyClient: (socket) => {
-                return Promise.resolve()
-                    .then(() => {
-                        if (verifyClient && typeof (verifyClient) === 'function') {
-                            return verifyClient(socket, this.router.analyze(socket.upgradeReq.url).fingerprint);
-                        }
-                        return 0;
-                    });
+            verifyClient: socket => {
+                return typeof verifyClient === 'function' ? verifyClient(socket, socket.fingerprint) : false;
             }
         });
     }
     publish(data, message) {
-        let room;
-        try {
-            room = this.rooms[data.path.replace(INTERPOLATION_REGEX, (placeholder, label) => (data.params[label] || placeholder))];
-        } catch (e) {
-            throw e;
-        }
+        const room = this.rooms[data.path.replace(INTERPOLATION_REGEX, (placeholder, label) => (data.params[label] || placeholder))];
         if (room && room.size) {
-            let formattedMessage = helpers.formatMessage(message);
+            const formattedMessage = helpers.formatMessage(message);
             room.forEach(function(socket) {
-                if (socket.readyState === ws.OPEN) {
-                    socket.send(formattedMessage);
-                }
+                if (socket.readyState === ws.OPEN) socket.send(formattedMessage);
             });
         }
     }
     broadcast(message) {
-        let formattedMessage = helpers.formatMessage(message);
-        this.wss.clients.forEach(function(socket) {
-            socket.send(formattedMessage);
-        });
+        const formattedMessage = helpers.formatMessage(message);
+        this.wss.clients.forEach(socket => socket.send(formattedMessage));
     }
     stop() {
         this.wss && this.wss.close();
