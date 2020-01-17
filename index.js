@@ -23,7 +23,12 @@ class SocketServer extends EventEmitter {
         this.wss.on('connection', (socket) => {
             let cookies = (socket.upgradeReq.headers && socket.upgradeReq.headers.cookie) || '';
             let url = socket.upgradeReq.url.split('?').shift();
-            let fingerprint = this.router.analyze(url).fingerprint;
+            let fingerprint;
+            try {
+                fingerprint = this.router.analyze(url).fingerprint;
+            } catch (e) {
+                return socket.close(4500, '4500');
+            }
             Promise.resolve()
                 .then(() => (!this.disableXsrf && helpers.jwtXsrfCheck(
                     helpers.getTokens([socket.upgradeReq.url.replace(/[^?]+\?/ig, '')], ['&', '=']), // parse url string into hash object
@@ -54,11 +59,8 @@ class SocketServer extends EventEmitter {
                 })
                 .then(() => (this.emit('connection')))
                 .catch((err) => {
-                    if (!err.isBoom) {
-                        this.utHttpServer.log && this.utHttpServer.log.error && this.utHttpServer.log.error(err);
-                        return socket.close(4500, '4500');
-                    }
                     this.utHttpServer.log && this.utHttpServer.log.error && this.utHttpServer.log.error(err);
+                    if (!err.isBoom) return socket.close(4500, '4500');
                     socket.close(
                         4000 + parseInt(err.output.payload.statusCode), // based on https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent#Status_codes
                         (4000 + parseInt(err.output.payload.statusCode)).toString() // Send status code as reason because Firefox/Edge show 1005 only as code
@@ -114,7 +116,7 @@ class SocketServer extends EventEmitter {
         });
     }
     stop() {
-        this.wss.close();
+        this.wss && this.wss.close();
     }
 }
 

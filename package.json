@@ -30,8 +30,8 @@
     "jsonwebtoken": "8.5.0"
   },
   "devDependencies": {
-    "tap": "^12.5.2",
-    "ut-tools": "^6.8.10"
+    "tap": "^14.6.2",
+    "ut-tools": "^6.30.5"
   },
   "repository": {
     "type": "git",
