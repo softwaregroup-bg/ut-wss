@@ -20,45 +20,55 @@ class SocketServer extends EventEmitter {
         this.wss = new ws.Server({
             server: httpServerListener
         });
-        this.wss.on('connection', (socket) => {
-            let cookies = (socket.upgradeReq.headers && socket.upgradeReq.headers.cookie) || '';
-            let url = socket.upgradeReq.url.split('?').shift();
-            let fingerprint = this.router.analyze(url).fingerprint;
+        this.wss.on('connection', (socket, req) => {
+            try {
+                // socket.upgradeReq not supported anymore:
+                // https://github.com/websockets/ws/pull/1099
+                // persist only fingerprint (for verification)
+                socket.fingerprint = this.router.analyze(req.url).fingerprint;
+            } catch (e) {
+                return socket.close(4404, 'Wrong url:' + req.url);
+            }
+
+            const url = req.url.split('?').shift();
+
             Promise.resolve()
-                .then(() => (!this.disableXsrf && helpers.jwtXsrfCheck(
-                    helpers.getTokens([socket.upgradeReq.url.replace(/[^?]+\?/ig, '')], ['&', '=']), // parse url string into hash object
-                    helpers.getTokens([cookies], [';', '='])[this.utHttpServerConfig.jwt.cookieKey], // parse cookie string into hash object
-                    this.utHttpServerConfig.jwt.key,
-                    Object.assign({}, this.utHttpServerConfig.jwt.verifyOptions, {ignoreExpiration: false})
-                )
-                ))
-                .then((p) => (new Promise((resolve, reject) => {
-                    let context = this.router.route(socket.upgradeReq.method.toLowerCase(), url);
-                    if (context.isBoom) {
-                        throw context;
+                .then(() => {
+                    if (this.disableXsrf) return;
+                    const params = {
+                        query: helpers.getTokens([req.url.replace(/[^?]+\?/ig, '')], ['&', '=']),
+                        hashKey: this.utHttpServerConfig.jwt.key,
+                        verifyOptions: {
+                            ...this.utHttpServerConfig.jwt.verifyOptions,
+                            ignoreExpiration: false
+                        }
+                    };
+                    if (req.headers.authorization) {
+                        const [scheme, token] = req.headers.authorization.split(' ');
+                        if (scheme === 'Bearer') params.cookie = token;
+                    } else if (req.headers.cookie) {
+                        params.cookie = helpers.getTokens([req.headers.cookie], [';', '='])[this.utHttpServerConfig.jwt.cookieKey];
                     }
-                    context.permissions = p;
-                    resolve(context);
-                })))
-                .then((context) => {
-                    if (!this.disablePermissionVerify) {
-                        return helpers.permissionVerify(context, fingerprint, this.utHttpServerConfig.appId);
-                    }
-                    return context;
+
+                    return helpers.jwtXsrfCheck(params);
                 })
-                .then((context) => (context.route.verifyClient(socket)))
+                .then(permissions => {
+                    const context = this.router.route(req.method.toLowerCase(), url);
+                    if (context.isBoom) throw context;
+                    if (this.disablePermissionVerify) return context;
+                    context.permissions = permissions;
+                    return helpers.permissionVerify(context, socket.fingerprint, this.utHttpServerConfig.appId);
+                })
+                .then(context => context.route.verifyClient(socket))
                 .then(() => {
                     return this.router
-                        .route(socket.upgradeReq.method.toLowerCase(), url).route
-                        .handler(fingerprint, socket);
+                        .route(req.method.toLowerCase(), url).route
+                        .handler(socket.fingerprint, socket);
                 })
                 .then(() => (this.emit('connection')))
                 .catch((err) => {
-                    if (!err.isBoom) {
-                        this.utHttpServer.log && this.utHttpServer.log.error && this.utHttpServer.log.error(err);
-                        return socket.close(4500, '4500');
-                    }
                     this.utHttpServer.log && this.utHttpServer.log.error && this.utHttpServer.log.error(err);
+                    if (!err.isBoom) return socket.close(4500, '4500');
                     socket.close(
                         4000 + parseInt(err.output.payload.statusCode), // based on https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent#Status_codes
                         (4000 + parseInt(err.output.payload.statusCode)).toString() // Send status code as reason because Firefox/Edge show 1005 only as code
@@ -72,49 +82,30 @@ class SocketServer extends EventEmitter {
             path: path
         }, {
             handler: (roomId, socket) => {
-                if (!this.rooms[roomId]) {
-                    this.rooms[roomId] = new Set();
-                }
+                if (!this.rooms[roomId]) this.rooms[roomId] = new Set();
                 this.rooms[roomId].add(socket);
-                socket.on('close', () => {
-                    this.rooms[roomId].delete(socket);
-                });
+                socket.on('close', () => this.rooms[roomId].delete(socket));
             },
-            verifyClient: (socket) => {
-                return Promise.resolve()
-                    .then(() => {
-                        if (verifyClient && typeof (verifyClient) === 'function') {
-                            return verifyClient(socket, this.router.analyze(socket.upgradeReq.url).fingerprint);
-                        }
-                        return 0;
-                    });
+            verifyClient: socket => {
+                return typeof verifyClient === 'function' ? verifyClient(socket, socket.fingerprint) : false;
             }
         });
     }
     publish(data, message) {
-        let room;
-        try {
-            room = this.rooms[data.path.replace(INTERPOLATION_REGEX, (placeholder, label) => (data.params[label] || placeholder))];
-        } catch (e) {
-            throw e;
-        }
+        const room = this.rooms[data.path.replace(INTERPOLATION_REGEX, (placeholder, label) => (data.params[label] || placeholder))];
         if (room && room.size) {
-            let formattedMessage = helpers.formatMessage(message);
+            const formattedMessage = helpers.formatMessage(message);
             room.forEach(function(socket) {
-                if (socket.readyState === ws.OPEN) {
-                    socket.send(formattedMessage);
-                }
+                if (socket.readyState === ws.OPEN) socket.send(formattedMessage);
             });
         }
     }
     broadcast(message) {
-        let formattedMessage = helpers.formatMessage(message);
-        this.wss.clients.forEach(function(socket) {
-            socket.send(formattedMessage);
-        });
+        const formattedMessage = helpers.formatMessage(message);
+        this.wss.clients.forEach(socket => socket.send(formattedMessage));
     }
     stop() {
-        this.wss.close();
+        this.wss && this.wss.close();
     }
 }
 

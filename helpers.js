@@ -25,7 +25,7 @@ const helpers = {
                 return accum;
             }, {});
     },
-    jwtXsrfCheck(query, cookie, hashKey, verifyOptions) {
+    jwtXsrfCheck({query, cookie, hashKey, verifyOptions}) {
         return new Promise((resolve, reject) => {
             if (query.xsrf === '' || !cookie || cookie === '') { // return unauthorized if something is wrong with xsrf get query param or with cookie itself
                 return reject(Boom.unauthorized());
