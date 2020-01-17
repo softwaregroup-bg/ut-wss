@@ -29,17 +29,32 @@ class SocketServer extends EventEmitter {
             } catch (e) {
                 return socket.close(4404, 'Wrong url:' + req.url);
             }
-            const cookies = (req.headers && req.headers.cookie) || '';
+
             const url = req.url.split('?').shift();
+
             Promise.resolve()
                 .then(() => {
                     if (this.disableXsrf) return;
-                    return helpers.jwtXsrfCheck(
-                        helpers.getTokens([req.url.replace(/[^?]+\?/ig, '')], ['&', '=']), // parse url string into hash object
-                        helpers.getTokens([cookies], [';', '='])[this.utHttpServerConfig.jwt.cookieKey], // parse cookie string into hash object
-                        this.utHttpServerConfig.jwt.key,
-                        Object.assign({}, this.utHttpServerConfig.jwt.verifyOptions, {ignoreExpiration: false})
-                    );
+                    const params = {
+                        query: helpers.getTokens([req.url.replace(/[^?]+\?/ig, '')], ['&', '=']),
+                        hashKey: this.utHttpServerConfig.jwt.key,
+                        verifyOptions: {
+                            ...this.utHttpServerConfig.jwt.verifyOptions,
+                            ignoreExpiration: false
+                        }
+                    };
+                    if (req.headers.authorization) {
+                        const [scheme, token = ''] = req.headers.authorization.split(' ');
+                        if (scheme === 'Bearer') {
+                            // Bearer cookieKey=token or Bearer token
+                            const parts = token.split(this.utHttpServerConfig.jwt.cookieKey + '=');
+                            params.cookie = parts[1] || parts[0];
+                        }
+                    } else if (req.headers.cookie) {
+                        params.cookie = helpers.getTokens([req.headers.cookie], [';', '='])[this.utHttpServerConfig.jwt.cookieKey];
+                    }
+
+                    return helpers.jwtXsrfCheck(params);
                 })
                 .then(permissions => {
                     const context = this.router.route(req.method.toLowerCase(), url);
