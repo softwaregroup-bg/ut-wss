@@ -59,14 +59,9 @@ class SocketServer extends EventEmitter {
                 .then(permissions => {
                     const context = this.router.route(req.method.toLowerCase(), url);
                     if (context.isBoom) throw context;
+                    if (this.disablePermissionVerify) return context;
                     context.permissions = permissions;
-                    return context;
-                })
-                .then((context) => {
-                    if (!this.disablePermissionVerify) {
-                        return helpers.permissionVerify(context, socket.fingerprint, this.utHttpServerConfig.appId);
-                    }
-                    return context;
+                    return helpers.permissionVerify(context, socket.fingerprint, this.utHttpServerConfig.appId);
                 })
                 .then(context => context.route.verifyClient(socket))
                 .then(() => {
