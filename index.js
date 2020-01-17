@@ -44,12 +44,8 @@ class SocketServer extends EventEmitter {
                         }
                     };
                     if (req.headers.authorization) {
-                        const [scheme, token = ''] = req.headers.authorization.split(' ');
-                        if (scheme === 'Bearer') {
-                            // Bearer cookieKey=token or Bearer token
-                            const parts = token.split(this.utHttpServerConfig.jwt.cookieKey + '=');
-                            params.cookie = parts[1] || parts[0];
-                        }
+                        const [scheme, token] = req.headers.authorization.split(' ');
+                        if (scheme === 'Bearer') params.cookie = token;
                     } else if (req.headers.cookie) {
                         params.cookie = helpers.getTokens([req.headers.cookie], [';', '='])[this.utHttpServerConfig.jwt.cookieKey];
                     }
