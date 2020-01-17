@@ -21,16 +21,15 @@ class SocketServer extends EventEmitter {
             server: httpServerListener
         });
         this.wss.on('connection', (socket, req) => {
+            const url = req.url.split('?').shift();
             try {
                 // socket.upgradeReq not supported anymore:
                 // https://github.com/websockets/ws/pull/1099
                 // persist only fingerprint (for verification)
-                socket.fingerprint = this.router.analyze(req.url).fingerprint;
+                socket.fingerprint = this.router.analyze(url).fingerprint;
             } catch (e) {
                 return socket.close(4404, 'Wrong url:' + req.url);
             }
-
-            const url = req.url.split('?').shift();
 
             Promise.resolve()
                 .then(() => {
