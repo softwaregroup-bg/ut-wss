@@ -1,3 +1,12 @@
+## [0.2.3](https://github.com/softwaregroup-bg/ut-wss/compare/v0.2.2...v0.2.3) (2020-01-17)
+
+
+### Bug Fixes
+
+* remove queryparams before obtaining fingerprint ([d4df1b5](https://github.com/softwaregroup-bg/ut-wss/commit/d4df1b5))
+
+
+
 ## [0.2.2](https://github.com/softwaregroup-bg/ut-wss/compare/v0.2.1...v0.2.2) (2020-01-17)
 
 
