@@ -1,3 +1,15 @@
+# [1.0.0](https://github.com/softwaregroup-bg/ut-wss/compare/v0.2.3...v1.0.0) (2020-01-20)
+
+
+*  feat: check socket auth on each message ([97084e1](https://github.com/softwaregroup-bg/ut-wss/commit/97084e1))
+
+
+### BREAKING CHANGES
+
+* socket authorization
+
+
+
 ## [0.2.3](https://github.com/softwaregroup-bg/ut-wss/compare/v0.2.2...v0.2.3) (2020-01-17)
 
 
