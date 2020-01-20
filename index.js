@@ -101,8 +101,8 @@ class SocketServer extends EventEmitter {
             }
         });
     }
-    publish(data, message) {
-        const room = this.rooms[data.path.replace(INTERPOLATION_REGEX, (placeholder, label) => (data.params[label] || placeholder))];
+    publish({path = '', params = {}}, message) {
+        const room = this.rooms[path.replace(INTERPOLATION_REGEX, (placeholder, label) => (params[label] || placeholder))];
         if (room && room.size) {
             const formattedMessage = helpers.formatMessage(message);
             room.forEach(socket => sendMessage(socket, formattedMessage));
