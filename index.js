@@ -6,14 +6,11 @@ const helpers = require('./helpers');
 const INTERPOLATION_REGEX = /\{([^}]*)\}/g;
 async function sendMessage(socket, message) {
     if (socket.readyState === ws.OPEN) {
-        if (socket.auth) {
-            try {
-                await helpers.jwtXsrfCheck(socket.auth);
-            } catch (e) {
-                return socket.close(4403, 'Session expired!');
-            }
-            return socket.send(message);
+        // socket.auth.exp must be EPOCH in seconds but not milliseconds
+        if (typeof socket.auth.exp === 'number' && socket.auth.exp * 1000 < Date.now()) {
+            return socket.close(4403, 'Session expired!');
         }
+        return socket.send(message);
     }
 }
 class SocketServer extends EventEmitter {
@@ -44,8 +41,8 @@ class SocketServer extends EventEmitter {
 
             Promise.resolve()
                 .then(() => {
-                    if (this.disableXsrf) return;
-                    socket.auth = {
+                    if (this.disableXsrf) return {};
+                    const params = {
                         query: helpers.getTokens([req.url.replace(/[^?]+\?/ig, '')], ['&', '=']),
                         hashKey: this.utHttpServerConfig.jwt.key,
                         verifyOptions: {
@@ -55,21 +52,20 @@ class SocketServer extends EventEmitter {
                     };
                     if (req.headers.authorization) {
                         const [scheme, token] = req.headers.authorization.split(' ');
-                        if (scheme === 'Bearer') socket.auth.cookie = token;
+                        if (scheme === 'Bearer') params.cookie = token;
                     } else if (req.headers.cookie) {
-                        socket.auth.cookie = helpers.getTokens([req.headers.cookie], [';', '='])[this.utHttpServerConfig.jwt.cookieKey];
+                        params.cookie = helpers.getTokens([req.headers.cookie], [';', '='])[this.utHttpServerConfig.jwt.cookieKey];
                     }
 
-                    return helpers.jwtXsrfCheck(socket.auth);
+                    return helpers.jwtXsrfCheck(params);
                 })
-                .then(permissions => {
+                .then(auth => {
+                    socket.auth = auth;
                     const context = this.router.route(req.method.toLowerCase(), url);
                     if (context.isBoom) throw context;
-                    if (this.disablePermissionVerify) return context;
-                    context.permissions = permissions;
-                    return helpers.permissionVerify(context, socket.fingerprint, this.utHttpServerConfig.appId);
+                    if (!this.disablePermissionVerify) helpers.permissionVerify(socket, this.utHttpServerConfig.appId);
+                    return context.route.verifyClient(socket);
                 })
-                .then(context => context.route.verifyClient(socket))
                 .then(() => {
                     return this.router
                         .route(req.method.toLowerCase(), url).route
