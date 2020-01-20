@@ -4,7 +4,18 @@ const Router = require('call').Router;
 const EventEmitter = require('events');
 const helpers = require('./helpers');
 const INTERPOLATION_REGEX = /\{([^}]*)\}/g;
-
+async function sendMessage(socket, message) {
+    if (socket.readyState === ws.OPEN) {
+        if (socket.auth) {
+            try {
+                await helpers.jwtXsrfCheck(socket.auth);
+            } catch (e) {
+                return socket.close(4403, 'Session expired!');
+            }
+            return socket.send(message);
+        }
+    }
+}
 class SocketServer extends EventEmitter {
     constructor(utHttpServer = {}, config = {}) {
         super();
@@ -34,7 +45,7 @@ class SocketServer extends EventEmitter {
             Promise.resolve()
                 .then(() => {
                     if (this.disableXsrf) return;
-                    const params = {
+                    socket.auth = {
                         query: helpers.getTokens([req.url.replace(/[^?]+\?/ig, '')], ['&', '=']),
                         hashKey: this.utHttpServerConfig.jwt.key,
                         verifyOptions: {
@@ -44,12 +55,12 @@ class SocketServer extends EventEmitter {
                     };
                     if (req.headers.authorization) {
                         const [scheme, token] = req.headers.authorization.split(' ');
-                        if (scheme === 'Bearer') params.cookie = token;
+                        if (scheme === 'Bearer') socket.auth.cookie = token;
                     } else if (req.headers.cookie) {
-                        params.cookie = helpers.getTokens([req.headers.cookie], [';', '='])[this.utHttpServerConfig.jwt.cookieKey];
+                        socket.auth.cookie = helpers.getTokens([req.headers.cookie], [';', '='])[this.utHttpServerConfig.jwt.cookieKey];
                     }
 
-                    return helpers.jwtXsrfCheck(params);
+                    return helpers.jwtXsrfCheck(socket.auth);
                 })
                 .then(permissions => {
                     const context = this.router.route(req.method.toLowerCase(), url);
@@ -94,14 +105,12 @@ class SocketServer extends EventEmitter {
         const room = this.rooms[data.path.replace(INTERPOLATION_REGEX, (placeholder, label) => (data.params[label] || placeholder))];
         if (room && room.size) {
             const formattedMessage = helpers.formatMessage(message);
-            room.forEach(function(socket) {
-                if (socket.readyState === ws.OPEN) socket.send(formattedMessage);
-            });
+            room.forEach(socket => sendMessage(socket, formattedMessage));
         }
     }
     broadcast(message) {
         const formattedMessage = helpers.formatMessage(message);
-        this.wss.clients.forEach(socket => socket.send(formattedMessage));
+        this.wss.clients.forEach(socket => sendMessage(socket, formattedMessage));
     }
     stop() {
         this.wss && this.wss.close();
