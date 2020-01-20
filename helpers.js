@@ -27,36 +27,31 @@ const helpers = {
     },
     jwtXsrfCheck({query, cookie, hashKey, verifyOptions}) {
         return new Promise((resolve, reject) => {
-            if (query.xsrf === '' || !cookie || cookie === '') { // return unauthorized if something is wrong with xsrf get query param or with cookie itself
-                return reject(Boom.unauthorized());
-            }
+            // return unauthorized if something is wrong with xsrf get query param or with cookie itself
+            if (query.xsrf === '' || !cookie) return reject(Boom.unauthorized());
             jwt.verify(cookie, hashKey, verifyOptions, (err, decoded) => { // verify cookie
-                if (err) { // if wild error appears, mark this request as unauthorized
-                    return reject(Boom.unauthorized(err.name));
-                }
-                if (decoded.xsrfToken !== query.xsrf) { // if xsrf get param is not the same as xsrfToken from the cookie, mark this request as unauthorized
-                    return reject(Boom.unauthorized('Xsrf mismatch'));
-                }
-                resolve(decoded.scopes); // yeah we are done, on later stage will check for correct permissions
+                // if wild error appears, mark this request as unauthorized
+                if (err) return reject(Boom.unauthorized(err.name));
+                // if xsrf get param is not the same as xsrfToken from the cookie, mark this request as unauthorized
+                if (decoded.xsrfToken !== query.xsrf) return reject(Boom.unauthorized('Xsrf mismatch'));
+                // yeah we are done, on later stage will check for correct permissions
+                resolve(decoded);
             });
         });
     },
-    permissionVerify(ctx, roomId, appId) {
-        let allowedActionList = ['%'];
-        if (appId) {
-            allowedActionList.push(appId);
+    permissionVerify(socket, appId) {
+        const actions = ['%'];
+        if (appId) actions.push(appId);
+        const objects = ['%', socket.fingerprint];
+        if (Array.isArray(socket.auth.scopes)) {
+            for (let i = 0, n = socket.auth.scopes.length; i < n; i += 1) {
+                const {actionId, objectId} = socket.auth.scopes[i];
+                if (actions.includes(actionId) && objects.includes(objectId)) {
+                    return true;
+                }
+            }
         }
-        let allowedObjectList = ['%', roomId];
-        let permitCount = (ctx.permissions || [])
-            .filter((v) => (
-                allowedActionList.includes(v.actionId) &&
-            allowedObjectList.includes(v.objectId)
-            )).length;
-
-        if (!(permitCount > 0)) {
-            throw Boom.forbidden();
-        }
-        return ctx;
+        throw Boom.forbidden();
     }
 };
 

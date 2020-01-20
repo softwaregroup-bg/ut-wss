@@ -14,7 +14,7 @@ const config = {
 const token = jwt.sign({
     xsrfToken,
     scopes: [{actionId: '%', objectId: '%'}]
-}, config.jwt.key);
+}, config.jwt.key, { expiresIn: '1m' });
 const socketServer = new SocketServer({ log: { error: tap.error } }, config);
 
 const stop = err => {

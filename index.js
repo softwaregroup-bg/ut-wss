@@ -4,7 +4,15 @@ const Router = require('call').Router;
 const EventEmitter = require('events');
 const helpers = require('./helpers');
 const INTERPOLATION_REGEX = /\{([^}]*)\}/g;
-
+async function sendMessage(socket, message) {
+    if (socket.readyState === ws.OPEN) {
+        // socket.auth.exp must be EPOCH in seconds but not milliseconds
+        if (typeof socket.auth.exp === 'number' && socket.auth.exp * 1000 < Date.now()) {
+            return socket.close(4403, 'Session expired!');
+        }
+        return socket.send(message);
+    }
+}
 class SocketServer extends EventEmitter {
     constructor(utHttpServer = {}, config = {}) {
         super();
@@ -33,7 +41,7 @@ class SocketServer extends EventEmitter {
 
             Promise.resolve()
                 .then(() => {
-                    if (this.disableXsrf) return;
+                    if (this.disableXsrf) return {};
                     const params = {
                         query: helpers.getTokens([req.url.replace(/[^?]+\?/ig, '')], ['&', '=']),
                         hashKey: this.utHttpServerConfig.jwt.key,
@@ -51,14 +59,13 @@ class SocketServer extends EventEmitter {
 
                     return helpers.jwtXsrfCheck(params);
                 })
-                .then(permissions => {
+                .then(auth => {
+                    socket.auth = auth;
                     const context = this.router.route(req.method.toLowerCase(), url);
                     if (context.isBoom) throw context;
-                    if (this.disablePermissionVerify) return context;
-                    context.permissions = permissions;
-                    return helpers.permissionVerify(context, socket.fingerprint, this.utHttpServerConfig.appId);
+                    if (!this.disablePermissionVerify) helpers.permissionVerify(socket, this.utHttpServerConfig.appId);
+                    return context.route.verifyClient(socket);
                 })
-                .then(context => context.route.verifyClient(socket))
                 .then(() => {
                     return this.router
                         .route(req.method.toLowerCase(), url).route
@@ -90,18 +97,16 @@ class SocketServer extends EventEmitter {
             }
         });
     }
-    publish(data, message) {
-        const room = this.rooms[data.path.replace(INTERPOLATION_REGEX, (placeholder, label) => (data.params[label] || placeholder))];
+    publish({path = '', params = {}}, message) {
+        const room = this.rooms[path.replace(INTERPOLATION_REGEX, (placeholder, label) => (params[label] || placeholder))];
         if (room && room.size) {
             const formattedMessage = helpers.formatMessage(message);
-            room.forEach(function(socket) {
-                if (socket.readyState === ws.OPEN) socket.send(formattedMessage);
-            });
+            room.forEach(socket => sendMessage(socket, formattedMessage));
         }
     }
     broadcast(message) {
         const formattedMessage = helpers.formatMessage(message);
-        this.wss.clients.forEach(socket => socket.send(formattedMessage));
+        this.wss.clients.forEach(socket => sendMessage(socket, formattedMessage));
     }
     stop() {
         this.wss && this.wss.close();
