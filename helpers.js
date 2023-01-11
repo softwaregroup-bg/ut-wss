@@ -1,20 +1,14 @@
 const Boom = require('boom');
 const jwt = require('jsonwebtoken');
 const helpers = {
-    formatMessage: function(message) {
-        let msg;
-        try {
-            msg = typeof message === 'string' ? message : JSON.stringify(message);
-        } catch (e) {
-            throw e;
-        }
-        return msg;
+    formatMessage: function(msg) {
+        return typeof msg === 'string' ? msg : JSON.stringify(msg);
     },
     getTokens(strs, separators) {
         if (!separators.length) {
             return {key: strs.shift().trim(), value: strs.shift().trim()};
         }
-        let separator = separators.shift();
+        const separator = separators.shift();
         return strs
             .map((s) => (helpers.getTokens(s.split(separator), separators)))
             .reduce((accum, c) => {
