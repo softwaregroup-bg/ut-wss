@@ -30,8 +30,7 @@
     "ws": "^7.2.1"
   },
   "devDependencies": {
-    "tap": "^14.6.2",
-    "ut-tools": "^6.41.5"
+    "tap": "^16.2.0"
   },
   "repository": {
     "type": "git",
