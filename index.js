@@ -24,6 +24,7 @@ class SocketServer extends EventEmitter {
         this.disableXsrf = (config.disableXsrf && config.disableXsrf.ws);
         this.disablePermissionVerify = (config.disablePermissionVerify && config.disablePermissionVerify.ws);
     }
+
     start(httpServerListener) {
         this.wss = new ws.Server({
             server: httpServerListener
@@ -82,10 +83,11 @@ class SocketServer extends EventEmitter {
                 });
         });
     }
+
     registerPath(path, verifyClient) {
         this.router.add({
             method: 'get',
-            path: path
+            path
         }, {
             handler: (roomId, socket) => {
                 if (!this.rooms[roomId]) this.rooms[roomId] = new Set();
@@ -97,6 +99,7 @@ class SocketServer extends EventEmitter {
             }
         });
     }
+
     publish({path = '', params = {}}, message) {
         const room = this.rooms[path.replace(INTERPOLATION_REGEX, (placeholder, label) => (params[label] || placeholder))];
         if (room && room.size) {
@@ -104,10 +107,12 @@ class SocketServer extends EventEmitter {
             room.forEach(socket => sendMessage(socket, formattedMessage));
         }
     }
+
     broadcast(message) {
         const formattedMessage = helpers.formatMessage(message);
         this.wss.clients.forEach(socket => sendMessage(socket, formattedMessage));
     }
+
     stop() {
         this.wss && this.wss.close();
     }
