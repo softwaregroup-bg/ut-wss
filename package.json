@@ -1,6 +1,6 @@
 {
   "name": "ut-wss",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Websocket server",
   "main": "index.js",
   "scripts": {
