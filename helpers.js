@@ -1,8 +1,8 @@
 const Boom = require('boom');
 const jwt = require('jsonwebtoken');
 const helpers = {
-    formatMessage: function(msg) {
-        return typeof msg === 'string' ? msg : JSON.stringify(msg);
+    formatMessage: function(message) {
+        return typeof message === 'string' ? message : JSON.stringify(message);
     },
     getTokens(strs, separators) {
         if (!separators.length) {
