@@ -1,6 +1,6 @@
 'use strict';
 const ws = require('ws');
-const Router = require('call').Router;
+const Router = require('@hapi/call').Router;
 const EventEmitter = require('events');
 const helpers = require('./helpers');
 const INTERPOLATION_REGEX = /\{([^}]*)\}/g;
