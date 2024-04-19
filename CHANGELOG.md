@@ -1,3 +1,12 @@
+## [1.0.4](https://github.com/softwaregroup-bg/ut-wss/compare/v1.0.3...v1.0.4) (2024-04-19)
+
+
+### Bug Fixes
+
+* Hoek module CVE-2020-36604 CVE-2020-36604 UATBDC-358 ([36bda25](https://github.com/softwaregroup-bg/ut-wss/commit/36bda25bfdfbf2a97c36cb7cc77113484b60e64e))
+
+
+
 ## [1.0.3](https://github.com/softwaregroup-bg/ut-wss/compare/v1.0.2...v1.0.3) (2024-04-18)
 
 
