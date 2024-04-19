@@ -1,4 +1,4 @@
-const Boom = require('boom');
+const Boom = require('@hapi/boom');
 const jwt = require('jsonwebtoken');
 const helpers = {
     formatMessage: function(message) {
